@@ -1,7 +1,7 @@
 package com.sparkStudy.chapter
 
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{HashPartitioner, Partitioner, SparkConf, SparkContext}
 
 /**
   * spark transformation和action
@@ -185,8 +185,71 @@ object SparkCore {
       * N<M 利用HashPartitioner函数将数据重新分区为M个，shuffle为true
       * N>M（相差不多） 将N个分区若干分区合并为一个新的分区，最终合并为M个分区，shuffle是指为false，父RDD与子RDD是窄依赖。
       * N>M（相差悬殊）若将shuffle设置为false，父子RDD是窄依赖，处于统一stage并行度不够，为此可以将shuffle设置为true。
+      * 分区：HashPartitioner分区(默认)、RangePartitioner分区和自定义分区
+      * HashPartitioner分区：对于给定key，计算其hashCode
+      * ，并除以分区个数取余，如果余数小于0，则用余数+分区个数，最后返回的值就是这个key所属分区ID
+      * RangePartitioner分区：将一定范围内的数映射到某个分区，分解算法实现。
+      * 自定义分区：需继承org.apache.spark.Partitioner，实现见下：
+      * repartitionAndSortWithinPartition:在repartition
+      * 重分区还要进行排序建议直接使用repartitionAndSortWithPartition,
+      * 可以一边重分区shuffle操作，一边排序，性能高于先shuffle再sort
       */
-
+    val rd10 = rdd18.repartitionAndSortWithinPartitions(new HashPartitioner(3))
+    val rd11 = rdd18.mapPartitionsWithIndex{
+      (idx,iter)=>{
+        var part_map = scala.collection.mutable.Map[String,List[(String,Int)]]()
+        while(iter.hasNext) {
+          var elem = iter.next()
+          var part_name = "part_" + idx
+          if(part_map.contains(part_name)){
+            var elems = part_map(part_name)
+            elems::=elem
+            part_map(part_name) = elems
+          }else{
+            part_map(part_name) = List[(String,Int)]{elem}
+          }
+        }
+        part_map.iterator
+      }
+    }
+    rd11.collect().foreach(println(_))
+    val rd12 = rd10.mapPartitionsWithIndex{
+      (idx,iter)=>{
+        var part_map = scala.collection.mutable.Map[String,List[(String,Int)]]()
+        while(iter.hasNext) {
+          var elem = iter.next()
+          var part_name = "part_" + idx
+          if(part_map.contains(part_name)){
+            var elems = part_map(part_name)
+            elems::=elem
+            part_map(part_name) = elems
+          }else{
+            part_map(part_name) = List[(String,Int)]{elem}
+          }
+        }
+        part_map.iterator
+      }
+    }
+    rd12.collect().foreach(println(_))
+    val rd13 = rdd18.repartitionAndSortWithinPartitions(new MyPartition(3))
+    val rd14 = rd13.mapPartitionsWithIndex{
+      (idx,iter)=>{
+        var part_map = scala.collection.mutable.Map[String,List[(String,Int)]]()
+        while(iter.hasNext) {
+          var elem = iter.next()
+          var part_name = "part_" + idx
+          if(part_map.contains(part_name)){
+            var elems = part_map(part_name)
+            elems::=elem
+            part_map(part_name) = elems
+          }else{
+            part_map(part_name) = List[(String,Int)]{elem}
+          }
+        }
+        part_map.iterator
+      }
+    }
+    rd14.collect().foreach(println(_))
     /**
       * reduce 对集合元素进行聚合
       */
@@ -221,7 +284,7 @@ object SparkCore {
     /**
       * 数据集写道文本文件中
       */
-    r1.saveAsTextFile("/opt/data/file1.txt")
+//    r1.saveAsTextFile("/opt/data/file1.txt")
 
     /**
       * 对于KV pairs类型RDD，返回一个(K,Int)的map，Int为K个数。查看是否存在数据倾斜
@@ -244,5 +307,30 @@ object SparkCore {
       res = res.::(ix , next)
     }
     res.iterator
+  }
+
+  class MyPartition(numParts : Int) extends Partitioner {
+    override def numPartitions: Int = numParts
+
+    /**
+      * 自定义分区算法
+      */
+    override def getPartition(key: Any) : Int = {
+      val code = key.toString.length % numParts
+      if(code < 0) {
+        code + numParts
+      }else {
+        code
+      }
+    }
+
+    override def equals(other :Any):Boolean = other match {
+      case mypartition : MyPartition =>
+        mypartition.numPartitions == numPartitions
+      case _=>
+        false
+    }
+
+    override def hashCode(): Int = numPartitions
   }
 }

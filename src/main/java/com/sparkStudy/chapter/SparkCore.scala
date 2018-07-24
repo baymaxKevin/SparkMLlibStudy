@@ -212,7 +212,6 @@ object SparkCore {
         part_map.iterator
       }
     }
-    rd11.collect().foreach(println(_))
     val rd12 = rd10.mapPartitionsWithIndex{
       (idx,iter)=>{
         var part_map = scala.collection.mutable.Map[String,List[(String,Int)]]()
@@ -230,7 +229,6 @@ object SparkCore {
         part_map.iterator
       }
     }
-    rd12.collect().foreach(println(_))
     val rd13 = rdd18.repartitionAndSortWithinPartitions(new MyPartition(3))
     val rd14 = rd13.mapPartitionsWithIndex{
       (idx,iter)=>{
@@ -249,7 +247,6 @@ object SparkCore {
         part_map.iterator
       }
     }
-    rd14.collect().foreach(println(_))
     /**
       * reduce 对集合元素进行聚合
       */
@@ -294,6 +291,18 @@ object SparkCore {
     /**
       * foreach对数据集每个元素执行func汉书
       */
+
+    /**
+      * 二次排序示例
+      */
+    val r3 = sc.textFile("/opt/data/secondarysortExample.txt",3)
+    r3.collect().foreach(println(_))
+    println("===========二次排序后=============")
+    val r4 = r3.map(line => (line.split(",")(0).toInt,line
+      .split(",")(1).toInt))
+    val r5 = r4.map(f => (new SecondarySort(f._1,f._2),f))
+    val r6 = r5.sortByKey(false).map(_._2)
+    r6.collect.foreach(println(_))
   }
 
   /**
@@ -332,5 +341,18 @@ object SparkCore {
     }
 
     override def hashCode(): Int = numPartitions
+  }
+
+  /**
+    * 二次排序
+    */
+  class SecondarySort(val first:Int, val second:Int) extends Ordered[SecondarySort] with Serializable {
+    override def compare(that: SecondarySort): Int = {
+      if(this.first - that.first != 0) {
+        this.first - that.first
+      }else {
+        this.second - that.second
+      }
+    }
   }
 }

@@ -178,6 +178,9 @@ object SparkSql {
       * 两种方式：
       * (1)spark.read.format(..).options(..).load()
       * (2)spark.read.jdbc(..)
+      * numPartitions:读写并行度的最大分区数
+      * fetchszie:(读)确定每次数据往返传递行数
+      * batchsize:(写)确定每次数据往返传递行数
       * 注意：mysql8.0.11驱动由com.mysql.jdbc.Driver改为com.mysql.cj.jdbc.Driver
        */
 

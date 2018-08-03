@@ -73,10 +73,10 @@ object SparkSql {
       "catalog_name,keyword_catalog_pv," +
       "keyword_catalog_pv_rate from keyword where app_id " +
       "= 1")
-//    df6.map(row => "keyword:" + row(0)).show()
+//    df6.map(row => "keyword:" + row(0)).show(3)
 //    df6.map(row => "keyword:" + row.getAs[String]
-//      ("keyword")).show()
-    implicit val mapEncode = org.apache.spark.sql.Encoders.kryo[Map[String,Any]]
+//      ("keyword")).show(3)
+//    implicit val mapEncode = org.apache.spark.sql.Encoders.kryo[Map[String,Any]]
 //    df6.map(row => row.getValuesMap[Any](List("keyword",
 //      "keyword_catalog_pv_rate"))).collect().foreach(println(_))
 
@@ -231,14 +231,14 @@ object SparkSql {
     spark.udf.register("get_average",new AverageAge1)
     val df14 = spark.sql("select province,get_average" +
       "(age) age1 from user_pro group by province")
-//    df14.show()
-//    df14.printSchema()
+    df14.show()
+    df14.printSchema()
 
     val df15 = spark.sql("select * from user_pro").as[UserPor]
     val aver = new Average2().toColumn.name("age2")
     val df16 = df15.select(aver)
-//    df16.show()
-//    df16.printSchema()
+    df16.show()
+    df16.printSchema()
 
   }
 

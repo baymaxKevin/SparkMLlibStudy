@@ -1,10 +1,14 @@
 package com.sparkMLlibStudy.model
 
-import org.apache.spark.ml.attribute.Attribute
+import java.util
+
+import org.apache.spark.ml.attribute.{Attribute, AttributeGroup, NumericAttribute}
 import org.apache.spark.ml.feature._
 import org.apache.spark.ml.linalg.{Matrix, Vector, Vectors}
 import org.apache.spark.ml.stat.{ChiSquareTest, Correlation}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SparkSession, functions}
+import org.apache.spark.sql.functions.col
 
 
 /**
@@ -315,9 +319,9 @@ object BasicStatisticsModel {
       .setOutputCol("categoryIndex")
 
     val indexed = indexer.fit(data5).transform(data5)
-    println(s"Transformed string column '${indexer
-      .getInputCol}'" + s"to indexed column '${indexer
-      .getOutputCol}'")
+//    println(s"Transformed string column '${indexer
+//      .getInputCol}'" + s"to indexed column '${indexer
+//      .getOutputCol}'")
 //    indexed.show(false)
 
     val inputColSchema = indexed.schema(indexer.getOutputCol)
@@ -468,7 +472,262 @@ object BasicStatisticsModel {
 
     // 归一化至[-1, 1]
     val scaledData = scml.transform(data9)
-    scaledData.select("features", "scaledFeatures").show(false)
+//    scaledData.select("features", "scaledFeatures").show(false)
+
+    /**
+      * Bucketizer
+      * 分箱(分段处理):连续值转换为离散类别
+      */
+    val splits = Array(Double.NegativeInfinity, -0.5,
+      0.0, 0.5, Double.PositiveInfinity)
+    val data10 = Array(-999.9, -0.5, -0.3, 0.0, 0.2, 999.9)
+    val df5 = spark.createDataFrame(data10.map(Tuple1.apply))
+      .toDF("features")
+
+    val bucketizer = new Bucketizer()
+      .setInputCol("features")
+      .setOutputCol("bucketedFeatures")
+      .setSplits(splits)
+
+    val bucketed = bucketizer.transform(df5)
+//    println(s"Bucketizer output with ${bucketizer.getSplits.length-1} buckets")
+//    bucketed.show()
+
+    /**
+      * ElementwiseProduct
+      * 对输入向量的每个元素乘以一个权重向量的每个元素，对输入向量每个元素逐个进行放缩
+      */
+    val transformingVector = Vectors.dense(0.0, 1.0, 2.0)
+    val transformer = new ElementwiseProduct()
+      .setScalingVec(transformingVector)
+      .setInputCol("features")
+      .setOutputCol("transformedVector")
+
+//    批量转换矢量以创建新列
+//    transformer.transform(data9).show()
+
+    val df6 = spark.createDataFrame(
+      Seq((0, 1.0, 3.0), (2, 2.0, 5.0))).toDF("id", "v1", "v2")
+
+    val sqlTrans = new SQLTransformer().setStatement(
+      "SELECT *, (v1 + v2) AS v3, (v1 * v2) AS v4 FROM __THIS__")
+
+//    sqlTrans.transform(df6).show()
+
+    /**
+      * VectorAssembler
+      * 一个transformer，将多列数据转化为单列的向量列
+      * 原始数据集里，经常会包含一些非指标数据，如 ID，Description 等
+      * 为方便后续模型进行特征输入，需要部分列的数据转换为特征向量，并统一命名
+      */
+    val df7 = spark.createDataFrame(
+      Seq(
+        (0, 18, 1.0, Vectors.dense(0.0, 10.0, 0.5), 1.0),
+        (0, 18, 1.0, Vectors.dense(0.0, 10.0), 0.0))
+    ).toDF("id", "hour", "mobile", "userFeatures", "clicked")
+
+    val assembler = new VectorAssembler()
+      .setInputCols(Array("hour","mobile","userFeatures"))
+      .setOutputCol("features")
+
+    val output = assembler.transform(df7)
+//    println("Assembled columns 'hour', 'mobile', 'userFeatures' to vector column 'features'")
+//    output.select("features", "clicked").show(false)
+
+    /**
+      * VectorSizeHint
+      * VectorSizeHint允许用户显式指定列的向量大小
+      * 以便VectorAssembler或可能需要知道向量大小的其他变换器可以将该列用作输入
+      */
+    val sizeHint = new VectorSizeHint()
+      .setInputCol("userFeatures")
+      .setHandleInvalid("skip")
+      .setSize(3)
+
+    val datasetWithSize = sizeHint.transform(df7)
+//    println("Rows where 'userFeatures' is not the right size are filtered out")
+//    datasetWithSize.show(false)
+
+    val outputHint = assembler.transform(datasetWithSize)
+//    println("Assembled columns 'hour', 'mobile', 'userFeatures' to vector column 'features'")
+//    output.select("features", "clicked").show(false)
+
+    /**
+      * QuantileDiscretizer
+      * 采用具有连续特征的列，并输出具有分箱分类特征的列
+      */
+    val df8 = spark.createDataFrame(
+      Array((0, 18.0), (1, 19.0), (2, 8.0), (3, 5.0), (4, 2.2))
+    ).toDF("id", "hour")
+    val discretizer = new QuantileDiscretizer()
+      .setInputCol("hour")
+      .setOutputCol("result")
+      .setNumBuckets(3)
+
+    val ret = discretizer.fit(df8).transform(df8)
+//    ret.show(false)
+
+    /**
+      * Imputer使用缺失值所在的列的平均值或中值来完成数据集中的缺失值
+      * 输入列应为DoubleType或FloatType
+      */
+    val df9 = spark.createDataFrame(
+      Seq(
+        (1.0, Double.NaN),
+        (2.0, Double.NaN),
+        (Double.NaN, 3.0),
+        (4.0, 4.0),
+        (5.0, 5.0)
+      )
+    ).toDF("a", "b")
+
+    val imputer = new Imputer()
+      .setInputCols(Array("a","b"))
+      .setOutputCols(Array("out_a","out_b"))
+
+    val modelIm = imputer.fit(df9)
+//    modelIm.transform(df9).show(false)
+
+    /**
+      * VectorSlicer
+      * 一个转换器输入特征向量，输出原始特征向量子集
+      * VectorSlicer接收带有特定索引的向量列，通过对这些索引的值进行筛选得到新的向量集
+      */
+    val data11 = util.Arrays.asList(
+      Row(Vectors.sparse(3, Seq((0, -2.0), (1, 2.3)))),
+      Row(Vectors.dense(-2.0, 2.3, 0.0))
+    )
+    val defaultAttr = NumericAttribute.defaultAttr
+    val attrs = Array("f1", "f2", "f3").map(defaultAttr.withName)
+    val attrGroup = new AttributeGroup("userFeatures", attrs.asInstanceOf[Array[Attribute]])
+
+    val df10 = spark.createDataFrame(data11, StructType(Array(attrGroup.toStructField())))
+
+    val slicer = new VectorSlicer().setInputCol("userFeatures").setOutputCol("features")
+    slicer.setIndices(Array(1)).setNames(Array("f3"))
+
+    val outputSL = slicer.transform(df10)
+//    outputSL.show(false)
+
+    /**
+      *  RFormula
+      *  RFormula通过R模型公式来选择列。支持R操作中的部分操作，包括‘~’, ‘.’, ‘:’, ‘+’以及‘-‘
+      *  产生一个向量特征列以及一个double或者字符串标签列
+      */
+    val df11 = spark.createDataFrame(Seq(
+      (7, "US", 18, 1.0),
+      (8, "CA", 12, 0.0),
+      (9, "NZ", 15, 0.0)
+    )).toDF("id", "country", "hour", "clicked")
+
+    val formula = new RFormula()
+      .setFormula("clicked ~ country + hour")
+      .setFeaturesCol("features")
+      .setLabelCol("label")
+
+    val outputFR = formula.fit(df11).transform(df11)
+//    outputFR.select("features", "label").show(false)
+
+    /**
+      * ChiSqSelector：卡方特征选择
+      * 适用于带有类别特征的标签数据
+      * ChiSqSelector根据独立卡方检验，然后选取类别标签主要依赖的特征
+      * 它类似于选取最有预测能力的特征
+      */
+    val df12 = spark.createDataFrame(
+      Seq(
+        (7, Vectors.dense(0.0, 0.0, 18.0, 1.0), 1.0),
+        (8, Vectors.dense(0.0, 1.0, 12.0, 0.0), 0.0),
+        (9, Vectors.dense(1.0, 0.0, 15.0, 0.1), 0.0)
+      )
+    ).toDF("id", "features", "clicked")
+
+    val selector = new ChiSqSelector()
+      .setNumTopFeatures(1)
+      .setFeaturesCol("features")
+      .setLabelCol("clicked")
+      .setOutputCol("selectedFeatures")
+
+    val relt = selector.fit(df12).transform(df12)
+//    relt.show(false)
+
+    /**
+      * Locality Sensitive Hashing (LSH)
+      * 一类重要的散列技术，常用于聚类，近似最近邻搜索和大数据集的异常检测
+      * 使用一系列函数（“LSH系列”）将数据点哈希到桶中，使得彼此接近的数据点在相同的桶中具有高概率，而数据点是远离彼此很可能在不同的桶中
+      * 在度量空间（M，d）中，其中M是集合，d是M上的距离函数，LSH族是满足以下属性的函数族h：
+      * ∀p,q∈M
+      * d(p,q)≤r1⇒Pr(h(p)=h(q))≥p1
+      * d(p,q)≥r2⇒Pr(h(p)=h(q))≤p2
+      * 则(r1, r2, p1, p2)-sensitive
+      * 1.Bucketed Random Projection for Euclidean Distance
+      * d(x,y) = sqrt(X,Y) = sqrt(sum((xi-yi)^2))
+      * h(x) = |xv/r|
+      * r是用户定义的桶长度
+      * 桶长度可以用来控制散列桶的平均大小（从而控制桶的数量）
+      * 2.MinHash for Jaccard Distance
+      * MinHash是用于计算Jaccard距离的LSH族
+      * d(A,B) = 1 -|A ∩ B| / |A ∪ B|
+      * MinHash 对集合中的每个元素应用随机哈希函数g，并取所有哈希值的最小值：
+      * h(A) = min(g(a))  ,a∈A
+      * https://www.cnblogs.com/maybe2030/p/4953039.html
+      * */
+    val dfA = spark.createDataFrame(Seq(
+      (0, Vectors.dense(1.0, 1.0)),
+      (1, Vectors.dense(1.0, -1.0)),
+      (2, Vectors.dense(-1.0, -1.0)),
+      (3, Vectors.dense(-1.0, 1.0))
+    )).toDF("id", "features")
+
+    val dfB = spark.createDataFrame(Seq(
+      (4, Vectors.dense(1.0, 0.0)),
+      (5, Vectors.dense(-1.0, 0.0)),
+      (6, Vectors.dense(0.0, 1.0)),
+      (7, Vectors.dense(0.0, -1.0))
+    )).toDF("id", "features")
+
+    val key = Vectors.dense(1.0, 0.0)
+
+    val brp = new BucketedRandomProjectionLSH()
+      .setBucketLength(2.0)
+      .setNumHashTables(3)
+      .setInputCol("features")
+      .setOutputCol("hashes")
+
+    val modelBR = brp.fit(dfA)
+//    特征转换
+//    println("The hashed dataset where hashed values are stored in the column 'hashes':")
+//    modelBR.transform(dfA).show(false)
+
+//    计算输入行的局部敏感哈希值，然后执行近似值相似性加入
+//    我们可以通过传入已经转换过的数据集来避免计算哈希值
+//    1.欧几里得距离
+//    println("Approximately joining dfA and dfB on Euclidean distance smaller than 1.5:")
+//    modelBR.approxSimilarityJoin(dfA, dfB, 1.5, "EuclideanDistance")
+//      .select(col("datasetA.id").alias("idA"), col("datasetB.id").alias("idB"),
+//        col("EuclideanDistance")).show(false)
+
+//    println("Approximately searching dfA for 2 nearest neighbors of the key:")
+//    modelBR.approxNearestNeighbors(dfA, key, 2).show(false)
+
+    val mh = new MinHashLSH()
+      .setNumHashTables(5)
+      .setInputCol("features")
+      .setOutputCol("hashes")
+
+    val modelMH = mh.fit(dfA)
+
+    println("The hashed dataset where hashed values are stored in the column 'hashes':")
+    modelMH.transform(dfA).show(false)
+
+    println("Approximately joining dfA and dfB on Jaccard distance smaller than 0.6:")
+    modelMH.approxSimilarityJoin(dfA, dfB, 0.6, "JaccardDistance")
+      .select(col("datasetA.id").alias("idA"),
+        col("datasetB.id").alias("idB"),
+        col("JaccardDistance")).show(false)
+
+    println("Approximately searching dfA for 2 nearest neighbors of the key:")
+    modelMH.approxNearestNeighbors(dfA, key, 2).show(false)
   }
 }
 

@@ -1,10 +1,8 @@
 package com.sparkStudy.utils
 
-import java.util
-import java.util.{Properties, UUID}
+import java.util.Properties
 
-import com.alibaba.fastjson.JSON
-import com.alibaba.fastjson.serializer.{ArraySerializer, SerializeFilter, SerializerFeature}
+import com.google.gson.Gson
 import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
 import org.apache.spark.sql.SparkSession
 
@@ -43,26 +41,16 @@ object UserProTopicProducer {
       .load()
 
     import spark.implicits._
-    val rdd1 = df.as[UserPro]
-      .rdd.map(f=>{
-      val maps = new util.HashMap[String,String]()
-      val keys = Array("uid","ceil","qq","age",
-        "birthday","height","is_married",
-        "duration_of_menstruation","menstrual_cycle",
-        "star_sign", "weight","province","city",
-        "recipient","recip_ceil")
-      val values = Array(f.uid.toString,f.ceil,f.qq,f.age
-        .toString,f.birthday,f.height.toString,f
-        .is_married.toString,f.duration_of_menstruation.toString,
-        f.menstrual_cycle.toString,f.star_sign.toString,f
-          .weight.toString, f.province,f.city,f.recipient,f.recip_ceil)
-      keys.zip(values).foreach(f=>maps.put(f._1,f._2))
-      JSON.toJSON(maps).toString
-    })
-    val rdd2 = df.as[UserPro].rdd.map(f=>JSON
-      .toJSONString(f,SerializerFeature.PrettyFormat))
-    rdd1.take(5).foreach(println(_))
-    rdd2.take(5).foreach(println(_))
+    val user_pro = df.as[UserPro].rdd.map(f=>new Gson().toJson(f)).collect()
+
+    while(true){
+      for(upo <- user_pro) {
+        println(upo)
+        val message = new KeyedMessage[String,String](topic, upo)
+        producer.send(message)
+        Thread.sleep(1000)
+      }
+    }
   }
   case class UserPro(var uid:Int,var ceil:String,var qq:String,
                      var age:Int,var birthday:String,

@@ -717,17 +717,19 @@ object BasicStatisticsModel {
 
     val modelMH = mh.fit(dfA)
 
-    println("The hashed dataset where hashed values are stored in the column 'hashes':")
-    modelMH.transform(dfA).show(false)
+//    println("The hashed dataset where hashed values are stored in the column 'hashes':")
+//    modelMH.transform(dfA).show(false)
 
-    println("Approximately joining dfA and dfB on Jaccard distance smaller than 0.6:")
-    modelMH.approxSimilarityJoin(dfA, dfB, 0.6, "JaccardDistance")
-      .select(col("datasetA.id").alias("idA"),
-        col("datasetB.id").alias("idB"),
-        col("JaccardDistance")).show(false)
+//    println("Approximately joining dfA and dfB on Jaccard distance smaller than 0.6:")
+//    modelMH.approxSimilarityJoin(dfA, dfB, 0.6, "JaccardDistance")
+//      .select(col("datasetA.id").alias("idA"),
+//        col("datasetB.id").alias("idB"),
+//        col("JaccardDistance")).show(false)
 
-    println("Approximately searching dfA for 2 nearest neighbors of the key:")
-    modelMH.approxNearestNeighbors(dfA, key, 2).show(false)
+//    println("Approximately searching dfA for 2 nearest neighbors of the key:")
+//    modelMH.approxNearestNeighbors(dfA, key, 2).show(false)
+
+
   }
 }
 

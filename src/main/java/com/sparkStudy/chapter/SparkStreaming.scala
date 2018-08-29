@@ -193,6 +193,7 @@ object SparkStreaming {
         import collection.JavaConverters._
         HBaseUtils1x.addDataBatchEx(tableName, puts.asJava)
         HBaseUtils1x.closeConnection()
+
       })
     })
     var rddQueue = new mutable.SynchronizedQueue[RDD[Int]]

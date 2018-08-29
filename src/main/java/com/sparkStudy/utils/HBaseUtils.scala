@@ -6,7 +6,7 @@
 //import org.apache.hadoop.hbase.client.BufferedMutator.ExceptionListener
 //import org.apache.hadoop.hbase.client._
 //import org.apache.hadoop.hbase.util.Bytes
-//import org.apache.hadoop.hbase.{CompareOperator, HBaseConfiguration, TableName}
+//import org.apache.hadoop.hbase.{HBaseConfiguration, TableName}
 //import org.slf4j.LoggerFactory
 //
 ///**

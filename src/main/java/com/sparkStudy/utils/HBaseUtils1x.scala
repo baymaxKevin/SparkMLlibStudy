@@ -3,8 +3,13 @@ package com.sparkStudy.utils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.client.BufferedMutator.ExceptionListener
 import org.apache.hadoop.hbase.client._
-import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.protobuf.ProtobufUtil
+import org.apache.hadoop.hbase.util.{Base64, Bytes}
 import org.apache.hadoop.hbase.{HBaseConfiguration, HColumnDescriptor, HTableDescriptor, TableName}
+import org.apache.hadoop.mapred.JobConf
+import org.apache.hadoop.mapreduce.Job
+import org.apache.spark.SparkContext
 import org.slf4j.LoggerFactory
 
 /**
@@ -22,6 +27,37 @@ object HBaseUtils1x {
     conf = HBaseConfiguration.create()
     conf.set("hbase.zookeeper.quorum", "lee")
     connection = ConnectionFactory.createConnection(conf)
+  }
+
+  def getJobConf(tableName:String) = {
+    val conf = HBaseConfiguration.create()
+    val jobConf = new JobConf(conf)
+    jobConf.set("hbase.zookeeper.quorum", "lee")
+    jobConf.set("hbase.zookeeper.property.clientPort", "2181")
+    jobConf.set(org.apache.hadoop.hbase.mapred.TableOutputFormat.OUTPUT_TABLE,tableName)
+    jobConf.setOutputFormat(classOf[org.apache.hadoop.hbase.mapred.TableOutputFormat])
+    jobConf
+  }
+
+  def getNewConf(tableName:String) = {
+    conf = HBaseConfiguration.create()
+    conf.set("hbase.zookeeper.quorum", "lee")
+    conf.set("hbase.zookeeper.property.clientPort", "2181")
+    conf.set(org.apache.hadoop.hbase.mapreduce.TableInputFormat.INPUT_TABLE,tableName)
+    val scan = new Scan()
+    conf.set(org.apache.hadoop.hbase.mapreduce.TableInputFormat.SCAN,Base64.encodeBytes(ProtobufUtil.toScan(scan).toByteArray))
+    conf
+  }
+
+  def getNewJobConf(tableName:String, sc:SparkContext) = {
+    sc.hadoopConfiguration.set("hbase.zookeeper.quorum", "lee")
+    sc.hadoopConfiguration.set("hbase.zookeeper.property.clientPort", "2181")
+    sc.hadoopConfiguration.set(org.apache.hadoop.hbase.mapreduce.TableOutputFormat.OUTPUT_TABLE,tableName)
+    val job = Job.getInstance(conf)
+    job.setOutputKeyClass(classOf[ImmutableBytesWritable])
+    job.setOutputValueClass(classOf[Result])
+    job.setOutputFormatClass(classOf[org.apache.hadoop.hbase.mapreduce.TableOutputFormat[ImmutableBytesWritable]])
+    job.getConfiguration
   }
 
   def closeConnection(): Unit = {
@@ -65,7 +101,13 @@ object HBaseUtils1x {
     for (i <- 0 until(column.length)) {
       put.add(Bytes.toBytes(familyName), Bytes.toBytes(column(i)), Bytes.toBytes(value(i)));
     }
-    put;
+    put
+  }
+
+  def insertData(tableName:String, put: Put) = {
+    val name = TableName.valueOf(tableName)
+    val table = connection.getTable(name)
+    table.put(put)
   }
 
   def addDataBatchEx(tableName:String, puts:java.util.List[Put]): Unit = {

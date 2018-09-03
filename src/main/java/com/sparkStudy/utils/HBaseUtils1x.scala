@@ -3,12 +3,10 @@ package com.sparkStudy.utils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.client.BufferedMutator.ExceptionListener
 import org.apache.hadoop.hbase.client._
-import org.apache.hadoop.hbase.io.ImmutableBytesWritable
 import org.apache.hadoop.hbase.protobuf.ProtobufUtil
 import org.apache.hadoop.hbase.util.{Base64, Bytes}
 import org.apache.hadoop.hbase.{HBaseConfiguration, HColumnDescriptor, HTableDescriptor, TableName}
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.SparkContext
 import org.slf4j.LoggerFactory
 
@@ -50,14 +48,13 @@ object HBaseUtils1x {
   }
 
   def getNewJobConf(tableName:String, sc:SparkContext) = {
-    sc.hadoopConfiguration.set("hbase.zookeeper.quorum", "lee")
-    sc.hadoopConfiguration.set("hbase.zookeeper.property.clientPort", "2181")
-    sc.hadoopConfiguration.set(org.apache.hadoop.hbase.mapreduce.TableOutputFormat.OUTPUT_TABLE,tableName)
-    val job = Job.getInstance(conf)
-    job.setOutputKeyClass(classOf[ImmutableBytesWritable])
-    job.setOutputValueClass(classOf[Result])
-    job.setOutputFormatClass(classOf[org.apache.hadoop.hbase.mapreduce.TableOutputFormat[ImmutableBytesWritable]])
-    job.getConfiguration
+    conf = HBaseConfiguration.create()
+    conf.set("hbase.zookeeper.quorum","lee")
+    conf.set("hbase.zookeeper.property.clientPort","2181")
+    conf.set("hbase.defaults.for.version.skip","true")
+    conf.set(org.apache.hadoop.hbase.mapreduce.TableOutputFormat.OUTPUT_TABLE, tableName)
+    conf.setClass("mapreduce.job.outputformat.class", classOf[org.apache.hadoop.hbase.mapreduce.TableOutputFormat[String]],classOf[org.apache.hadoop.mapreduce.OutputFormat[String, Mutation]])
+    new JobConf(conf)
   }
 
   def closeConnection(): Unit = {
@@ -66,38 +63,38 @@ object HBaseUtils1x {
 
   def createTable(tableName: String, family: Array[String]) {
     val admin = connection.getAdmin
-    val name: TableName = TableName.valueOf(tableName);
-    val desc: HTableDescriptor = new HTableDescriptor(name);
+    val name: TableName = TableName.valueOf(tableName)
+    val desc: HTableDescriptor = new HTableDescriptor(name)
     for (f <- family) {
-      desc.addFamily(new HColumnDescriptor(f));
+      desc.addFamily(new HColumnDescriptor(f))
     }
     if (!admin.tableExists(name)) {
-      admin.createTable(desc);
+      admin.createTable(desc)
     }
   }
 
   def createTable(tableName: String, family: Array[String],liveTime:Int) {
     val admin = connection.getAdmin
-    val name: TableName = TableName.valueOf(tableName);
-    val desc: HTableDescriptor = new HTableDescriptor(name);
+    val name: TableName = TableName.valueOf(tableName)
+    val desc: HTableDescriptor = new HTableDescriptor(name)
     for (f <- family) {
       val hColumnDescriptor=new HColumnDescriptor(f)
       hColumnDescriptor.setTimeToLive(liveTime)
       desc.addFamily(hColumnDescriptor)
     }
     if (!admin.tableExists(name)) {
-      admin.createTable(desc);
+      admin.createTable(desc)
     }
   }
 
   def getGetAction(rowKey: String):Get = {
-    val getAction = new Get(Bytes.toBytes(rowKey));
-    getAction.setCacheBlocks(false);
+    val getAction = new Get(Bytes.toBytes(rowKey))
+    getAction.setCacheBlocks(false)
     getAction
   }
 
   def getPutAction(rowKey: String, familyName:String, column: Array[String], value: Array[String]):Put = {
-    val put: Put = new Put(Bytes.toBytes(rowKey));
+    val put: Put = new Put(Bytes.toBytes(rowKey))
     for (i <- 0 until(column.length)) {
       put.add(Bytes.toBytes(familyName), Bytes.toBytes(column(i)), Bytes.toBytes(value(i)));
     }
@@ -135,47 +132,47 @@ object HBaseUtils1x {
 
   def scan4All(tableName:String, scan:Scan) = {
     val name = TableName.valueOf(tableName)
-    scan.setCacheBlocks(false);
-    connection.getTable(name).getScanner(scan);
+    scan.setCacheBlocks(false)
+    connection.getTable(name).getScanner(scan)
   }
 
   def scan4All(tableName:String, startRowKey:String, endRowKey:String, family:String, column:String) = {
     val name = TableName.valueOf(tableName)
-    val scan = new Scan();
-    scan.setStartRow(Bytes.toBytes(startRowKey));
-    scan.setStopRow(Bytes.toBytes(endRowKey));
-    scan.addColumn(Bytes.toBytes(family), Bytes.toBytes(column));
-    scan.setCacheBlocks(false);
-    connection.getTable(name).getScanner(scan);
+    val scan = new Scan()
+    scan.setStartRow(Bytes.toBytes(startRowKey))
+    scan.setStopRow(Bytes.toBytes(endRowKey))
+    scan.addColumn(Bytes.toBytes(family), Bytes.toBytes(column))
+    scan.setCacheBlocks(false)
+    connection.getTable(name).getScanner(scan)
   }
 
   def getResults(tableName: String, gets:java.util.List[Get]) : Array[Result] = {
     val name = TableName.valueOf(tableName)
-    val table = connection.getTable(name);
-    table.get(gets);
+    val table = connection.getTable(name)
+    table.get(gets)
   }
 
   def getResult(tableName: String, rowKey: String): Result = {
-    val get: Get = new Get(Bytes.toBytes(rowKey));
+    val get: Get = new Get(Bytes.toBytes(rowKey))
     val name = TableName.valueOf(tableName)
-    val table = connection.getTable(name);
-    table.get(get);
+    val table = connection.getTable(name)
+    table.get(get)
   }
 
   def deleteTable(tableName: String) {
     val admin = connection.getAdmin
     val name = TableName.valueOf(tableName)
-    val table = connection.getTable(name);
+    val table = connection.getTable(name)
     if (admin.tableExists(name)) {
-      admin.disableTable(name);
-      admin.deleteTable(name);
+      admin.disableTable(name)
+      admin.deleteTable(name)
     }
   }
 
   def deleteColumn(tableName: String , rowkeys: Set[String]): Unit = {
     val admin = connection.getAdmin
     val name = TableName.valueOf(tableName)
-    val table = connection.getTable(name);
+    val table = connection.getTable(name)
     val deletes = new java.util.ArrayList[Delete]()
     rowkeys.foreach(f=>{
       val delete = new Delete(Bytes.toBytes(f))

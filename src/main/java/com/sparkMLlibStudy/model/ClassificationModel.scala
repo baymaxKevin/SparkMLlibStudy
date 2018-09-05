@@ -38,6 +38,8 @@ object ClassificationModel {
       .format("libsvm")
       .load("/opt/modules/spark-2.3.1/data/mllib/sample_libsvm_data.txt")
 
+    training.show(5,false)
+
     val lr = new LogisticRegression()
       .setMaxIter(10)
       .setRegParam(0.3)

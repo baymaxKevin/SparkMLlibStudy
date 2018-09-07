@@ -1,7 +1,8 @@
 package com.sparkMLlibStudy.model
 
-import org.apache.spark.ml.classification.LogisticRegression
-import org.apache.spark.ml.feature.{FeatureHasher, StringIndexer}
+import org.apache.spark.ml.classification.{DecisionTreeClassificationModel, DecisionTreeClassifier, LogisticRegression}
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.feature.{FeatureHasher, StringIndexer, VectorIndexer}
 import org.apache.spark.mllib.evaluation.MulticlassMetrics
 import org.apache.spark.sql.{Row, SparkSession}
 
@@ -11,7 +12,7 @@ import org.apache.spark.sql.{Row, SparkSession}
   * @Date: 18-9-4 下午1:53
   * @Modified By:
   */
-object AdsCtrPredictionLR {
+object AdsCtrPrediction {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder()
       .appName("AdsCtrPredictionLR")
@@ -54,9 +55,11 @@ object AdsCtrPredictionLR {
       .setInputCols("site_id_index","site_domain_index","site_category_index","app_id_index","app_domain_index","app_category_index","device_id_index","device_ip_index","device_model_index","device_type","device_conn_type","C14","C15","C16","C17","C18","C19","C20","C21")
       .setOutputCol("feature")
 
-    println("特征Hasher编码：")
     val train_hs = hasher.transform(train_index)
     val test_hs = hasher.transform(test_index)
+    println("特征Hasher编码：")
+    train_index.show(5,false)
+    test_index.show(5,false)
 
     /**
       * LR建模
@@ -75,27 +78,64 @@ object AdsCtrPredictionLR {
       .setElasticNetParam(0)
       .setFeaturesCol("feature")
       .setLabelCol("click_index")
-      .setPredictionCol("click_predict")
+      .setPredictionCol("click_lr")
 
     val model_lr = lr.fit(train_hs)
 
     println(s"每个特征对应系数: ${model_lr.coefficients} 截距: ${model_lr.intercept}")
 
-    val predictions = model_lr.transform(test_hs)
-    predictions.select("click_index","click_predict","probability").show(100,false)
+    val prediction_lr = model_lr.transform(test_hs)
+    prediction_lr.select("click_index","click_lr","probability").show(10,false)
 
-    val predictionRdd = predictions.select("click_predict","click_index").rdd.map{
-      case Row(click_predict:Double,click_index:Double)=>(click_predict,click_index)
+    val predictionLrRdd = prediction_lr.select("click_lr","click_index").rdd.map{
+      case Row(click_lr:Double,click_index:Double)=>(click_lr,click_index)
     }
-    val metrics = new MulticlassMetrics(predictionRdd)
+    val metrics_lr = new MulticlassMetrics(predictionLrRdd)
 
-    val accuracy = metrics.accuracy
-    val weightedPrecision = metrics.weightedPrecision
-    val weightedRecall = metrics.weightedRecall
-    val f1 = metrics.weightedFMeasure
+    val accuracyLr = metrics_lr.accuracy
+    val weightedPrecisionLr = metrics_lr.weightedPrecision
+    val weightedRecallLr = metrics_lr.weightedRecall
+    val f1Lr = metrics_lr.weightedFMeasure
 
-    println(s"LR评估结果：\n分类正确率：${accuracy}\n加权正确率：${weightedPrecision}\n加权召回率：${weightedRecall}\nF1值：${f1}")
+    println(s"LR评估结果：\n分类正确率：${accuracyLr}\n加权正确率：${weightedPrecisionLr}\n加权召回率：${weightedRecallLr}\nF1值：${f1Lr}")
 
+    /**
+      * DecisionTree分类
+      */
 
+    val vectorIndexer = new VectorIndexer()
+      .setInputCol("feature")
+      .setOutputCol("feature_indexed")
+      .setMaxCategories(4)
+
+    val model_vin = vectorIndexer.fit(train_hs)
+    val train_vin = model_vin.transform(train_hs)
+    val test_vin = model_vin.transform(test_hs)
+    println("VectorIndexer离散特征编码：")
+    train_vin.show(5,false)
+    test_vin.show(5,false)
+
+    val dt = new DecisionTreeClassifier()
+      .setLabelCol("click_index")
+      .setFeaturesCol("feature_indexed")
+      .setPredictionCol("click_dt")
+
+    val model_dt = dt.fit(train_vin)
+    val prediction_dt = model_dt.transform(test_vin)
+    prediction_dt.select("click_index","click_dt","probability").show(10,false)
+
+    val predictionDtRdd = prediction_dt.rdd.map{
+      case Row(click_dt:Double,click_index:Double)=>(click_dt,click_index)
+    }
+    val metrics_dt = new MulticlassClassificationEvaluator()
+      .setLabelCol("click_index")
+      .setPredictionCol("click_dt")
+      .setMetricName("accuray_dt")
+    val accuracyDt = metrics_dt.evaluate(prediction_dt)
+    println(s"Dt分类正确率 = ${accuracyDt}")
+
+    val treeModel = model_dt.asInstanceOf[DecisionTreeClassificationModel]
+    println(s"决策树模型参数:\n ${treeModel.toDebugString}")
   }
+
 }

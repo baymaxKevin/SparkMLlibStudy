@@ -9,7 +9,11 @@ import org.apache.spark.sql.SparkSession
 /**
   * @Author: JZ.lee
   * @Description: 回归
-  *              1.线性回归(linear regression)
+  *              1.线性回归(linear regression
+  *              2.广义线性回归(Generalized linear regression)
+  *              3.决策树回归(Decision tree regression)
+  *              4.随机森林回归(Random forest regression)
+  *              5.梯度提升决策树回归(Gradient-boosted tree regression)
   * @Date: 18-9-7 上午11:45
   * @Modified By:
   */

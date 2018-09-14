@@ -24,7 +24,7 @@ object CollaborativeFiltering {
       .map(parseRating(_))
       .toDF()
 
-//    CollaborativeFilterItemBased("/opt/modules/spark-2.3.1/data/mllib/als/sample_movielens_ratings.txt", spark)
+    CollaborativeFilterItemBased("/opt/modules/spark-2.3.1/data/mllib/als/sample_movielens_ratings.txt", spark)
     val Array(training, test) = ratings.randomSplit(Array(0.8, 0.2))
 
     /**
@@ -82,8 +82,12 @@ object CollaborativeFiltering {
 //    每个用户评分最高的top10物品
     val userRecs = rating.select($"userId",$"movieId",$"rating",functions.row_number().over(Window.partitionBy("userId").orderBy("rating")).alias("rank"))
       .filter($"rank" <= 10)
-//    获取每个物品用户评分,item2manyUser格式如下(userId,itemId,rating,numRaters)
-    val item2manyUser = rating.groupBy($"movieId").pivot("userId").count()
-    item2manyUser.show(100,false)
+//    获取每个物品用户评分,item2manyUser格式如下(userId,itemId,rating,numRaters,timestamp)
+//    rating.groupBy($"movieId").pivot("rating").count().show(false)
+    val item2manyUser = rating.groupBy($"movieId").count().alias("numRaters")
+    val ratingsWithSize = rating.join(item2manyUser,"movieId")
+//    ratingWithSize自join,过滤重复的item pairs减少运算量
+    val ratingPairs = ratingsWithSize.join(ratingsWithSize,"userId").select("userId","movieId","rating","numRaters")
+    ratingPairs.show(100,false)
   }
 }

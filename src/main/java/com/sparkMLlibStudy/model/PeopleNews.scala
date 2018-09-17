@@ -6,7 +6,7 @@ import com.hankcs.hanlp.seg.Segment
 import com.hankcs.hanlp.seg.common.Term
 import com.hankcs.hanlp.tokenizer.{IndexTokenizer, NLPTokenizer, SpeedTokenizer, StandardTokenizer}
 import org.apache.spark.ml.classification.LogisticRegression
-import org.apache.spark.ml.feature.{CountVectorizer, StopWordsRemover, StringIndexer}
+import org.apache.spark.ml.feature.{CountVectorizer, IndexToString, StopWordsRemover, StringIndexer}
 import org.apache.spark.ml.util.Identifiable
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
@@ -27,9 +27,12 @@ object PeopleNews {
     val news = spark.read.format("CSV").option("header","true").load("/opt/data/peopleNews.csv")
     news.show(5,false)
 //    println(news.where(news("title").isNotNull && news("created_time").isNotNull && news("label").isNotNull && news("content").isNotNull && news("source").isNotNull).count())
-    val peopleNews = news.filter(news("title").isNotNull && news("created_time").isNotNull && news("tab").isNotNull && news("content").isNotNull && news("source").isNotNull)
-
-    peopleNews.show(5, false)
+    val peopleWebNews = news.filter(news("title").isNotNull && news("created_time").isNotNull && news("tab").isNotNull && news("content").isNotNull && news("source").isNotNull)
+    println("过滤完整资讯条数为：" + peopleWebNews.count())
+    println("各频道资讯条数为：")
+    peopleWebNews.groupBy("tab").count().show(false)
+    peopleWebNews.show(5, false)
+    val peopleNews = peopleWebNews.filter(peopleWebNews("tab").isin("国际","军事","财经","金融","时政","法制","社会"))
 
     val indexer = new StringIndexer()
       .setInputCol("tab")
@@ -37,6 +40,7 @@ object PeopleNews {
       .fit(peopleNews)
 
     val indDF = indexer.transform(peopleNews)
+    indDF.groupBy("tab","label").count().show(false)
     indDF.show(5,false)
 
     val segmenter = new Segmenter(spark)
@@ -77,14 +81,111 @@ object PeopleNews {
       .setFeaturesCol("features")
       .fit(train)
     train.unpersist()
+//    打印逻辑回归的系数和截距
+    println(s"Coefficients: ${lr.coefficientMatrix}")
+    println(s"Intercept: ${lr.interceptVector} ")
+    val trainingSummary = lr.summary
+
+//    获取每次迭代目标,每次迭代的损失,会逐渐减少
+    val objectiveHistory = trainingSummary.objectiveHistory
+    println("objectiveHistory:")
+    objectiveHistory.foreach(loss => println(loss))
+
+    /**
+      * 二分类常用指标：
+      * True Positive(真正,TP)=>将正类预测为正类
+      * True Negative(真负,TN)=>将负类预测为负类
+      * False Positive(假正,FP)=>将负类预测为正类，误报
+      * False Nagative(假负,FN)=>将正类预测为负类，漏报
+      * True positive rate: TPR=TP/(TP+FN)
+      * false positive rate: FPR=FP/(FP+TN)
+      * Precision(精确率):预测为1的结果中预测正确的概率
+      * Recall(召回率):标签为1样本被预测正确概率，Recall=TPR
+      * Precision和Recall在某些场景下是互斥的，需要一定的约束变量来控制，引入F-score
+      * F=(a^2+1)P*R/a^2*(P+R)
+      * ROC曲线: 横坐标是FRP，纵坐标是TPR，TPR越大，FPR越小，分类效果较好
+      * ROC曲线并不能完美的表征二分类器的分类性能，如何评价?
+      * AUC：ROC曲线下的面积
+      */
+    println("验证集各标签误报率(FPR):")
+    trainingSummary.falsePositiveRateByLabel
+      .zipWithIndex.foreach { case (rate, label) =>
+      println(s"label $label: $rate")
+    }
+
+    println("验证集各标签真分类率(TPR):")
+    trainingSummary.truePositiveRateByLabel.zipWithIndex
+      .foreach { case (rate, label) =>
+        println(s"label $label: $rate")
+      }
+
+    println("验证集各标签分类正确率:")
+    trainingSummary.precisionByLabel.zipWithIndex
+      .foreach { case (prec, label) =>
+        println(s"label $label: $prec")
+      }
+
+    println("验证集各标签召回率:")
+    trainingSummary.recallByLabel.zipWithIndex.foreach {
+      case (rec, label) =>
+        println(s"label $label: $rec")
+    }
+
+
+    println("验证集各标签F值:")
+    trainingSummary.fMeasureByLabel.zipWithIndex.foreach
+    { case (f, label) =>
+      println(s"label $label: $f")
+    }
+
+    val accuracyLtr = trainingSummary.accuracy
+    val falsePositiveRateLtr =
+      trainingSummary.weightedFalsePositiveRate
+    val truePositiveRateLtr =
+      trainingSummary.weightedTruePositiveRate
+    val fMeasureLtr = trainingSummary.weightedFMeasure
+    val precisionLtr = trainingSummary.weightedPrecision
+    val recallLtr = trainingSummary.weightedRecall
+    println(s"分类准确率(Precision): $accuracyLtr\n误报率(FPR): $falsePositiveRateLtr\n真正类率(TPR): $truePositiveRateLtr\n" +
+      s"F值(F-measure): $fMeasureLtr\n分类准确率(Precision): $precisionLtr \n召回率(Recall): $recallLtr")
 
     val predictions = lr.transform(test)
-    predictions.select("prediction","label","probability").show(5,false)
-    val accuracyLr = lr.evaluate(test).accuracy
-    val weightedPrecisionLr = lr.evaluate(test).weightedPrecision
-    val weightedRecallLr = lr.evaluate(test).weightedRecall
-    println(s"accuray: ${accuracyLr}\nweightedPrecision:${weightedPrecisionLr}\nweightedRecallLr:${weightedRecallLr}")
+    val converts = new IndexToString()
+      .setInputCol("prediction")
+      .setOutputCol("predictionTab")
+      .setLabels(indDF.schema("label").metadata.getMetadata("ml_attr").getStringArray("vals"))
 
+    val predTab = converts.transform(predictions)
+    predTab.select("prediction","predictionTab","label","tab","probability").show(5,false)
+    val lrv = lr.evaluate(test)
+    println("测试集各标签误报率(FPR):")
+    lrv.falsePositiveRateByLabel.zipWithIndex.foreach{
+      case (rate, label) =>println(s"label $label: $rate")
+    }
+    println("测试集各标签真正率(TPR):")
+    lrv.truePositiveRateByLabel.zipWithIndex.foreach{
+      case (rate, label) =>println(s"label $label: $rate")
+    }
+    println("测试集各标签准确率(Precision):")
+    lrv.precisionByLabel.zipWithIndex.foreach{
+      case (rate, label) =>println(s"label $label: $rate")
+    }
+    println("测试集各标签召回率(Recall):")
+    lrv.recallByLabel.zipWithIndex.foreach{
+      case (rate, label) =>println(s"label $label: $rate")
+    }
+    println("测试集各标签F1值:")
+    lrv.fMeasureByLabel.zipWithIndex.foreach{
+      case (f, label) =>println(s"label $label:$f")
+    }
+    val accuracyLrv = lrv.accuracy
+    val truePositiveRateLrv = lrv.weightedTruePositiveRate
+    val falsePositiveRateLrv = lrv.weightedFalsePositiveRate
+    val fMeasureLrv = lrv.weightedFMeasure
+    val precisionLrv = lrv.weightedPrecision
+    val recallLrv = lrv.weightedRecall
+    println(s"分类准确率(Precision): $accuracyLrv\n误报率(FPR): $falsePositiveRateLrv\n真正类率(TPR): $truePositiveRateLrv\n" +
+      s"F值(F-measure): $fMeasureLrv\n分类准确率(Precision): $precisionLrv \n召回率(Recall): $recallLrv")
   }
 
   /**

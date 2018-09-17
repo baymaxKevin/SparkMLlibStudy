@@ -62,7 +62,8 @@ object PeopleNews {
     removedDF.show(5,false)
 
     val vectorizer = new CountVectorizer()
-      .setVocabSize(2000)
+      .setVocabSize(500)
+      .setMinDF(2)
       .setInputCol("removed")
       .setOutputCol("features")
       .fit(removedDF)

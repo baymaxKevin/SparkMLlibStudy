@@ -1,9 +1,13 @@
 package com.sparkMLlibStudy.model
 
+import java.util.Date
+
 import com.hankcs.hanlp.model.crf.CRFLexicalAnalyzer
 import com.hankcs.hanlp.seg.NShort.NShortSegment
 import com.hankcs.hanlp.seg.common.Term
 import com.hankcs.hanlp.tokenizer.{IndexTokenizer, NLPTokenizer, SpeedTokenizer, StandardTokenizer}
+import ml.dmlc.xgboost4j.scala.XGBoost
+import ml.dmlc.xgboost4j.scala.spark.XGBoostClassifier
 import org.apache.spark.ml.classification._
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature._
@@ -66,6 +70,7 @@ object PeopleNewsPipelines {
       .setOutputCol("predictionTab")
       .setLabels(indexer.labels)
 
+    val lrStartTime = new Date().getTime
     val lrPipeline = new Pipeline()
         .setStages(Array(indexer,segmenter,remover,vectorizer,lr,converts))
 
@@ -84,8 +89,12 @@ object PeopleNewsPipelines {
     println(s"逻辑回归验证集分类准确率 = $accuracyLrt")
     val accuracyLrv = evaluator.evaluate(lrPredictions)
     println(s"逻辑回归测试集分类准确率 = $accuracyLrv")
+    val lrEndTime = new Date().getTime
+    val lrCostTime = lrEndTime - lrStartTime
+    println(s"逻辑回归分类耗时：$lrCostTime")
 
 //    训练决策树模型
+    val dtStartTime = new Date().getTime
     val dt = new DecisionTreeClassifier()
       .setLabelCol("label")
       .setFeaturesCol("features")
@@ -106,8 +115,12 @@ object PeopleNewsPipelines {
     println(s"决策树验证集分类准确率 = $accuracyDtt")
     val accuracyDtv = evaluator.evaluate(dtPredictions)
     println(s"决策树测试集分类准确率 = $accuracyDtv")
+    val dtEndTime = new Date().getTime
+    val dtCostTime = dtEndTime - dtStartTime
+    println(s"决策树分类耗时：$dtCostTime")
 
     //    训练随机森林模型
+    val rfStartTime = new Date().getTime
     val rf = new RandomForestClassifier()
       .setLabelCol("label")
       .setFeaturesCol("features")
@@ -128,6 +141,9 @@ object PeopleNewsPipelines {
     println(s"随机森林验证集分类准确率为：$accuracyRft")
     val accuracyRfv = evaluator.evaluate(rfPredictions)
     println(s"随机森林测试集分类准确率为：$accuracyRfv")
+    val rfEndTime = new Date().getTime
+    val rfCostTime = rfEndTime - rfStartTime
+    println(s"随机森林分类耗时：$rfCostTime")
 
     //    GBDT模型训练
     val gbt = new GBTClassifier()
@@ -146,12 +162,13 @@ object PeopleNewsPipelines {
 //    val accuracyGbtv = evaluator.evaluate(gbtPredictions)
 //    println(s"梯度提升决策树测试集分类准确率：$accuracyGbtv")
 
-//    多层感知分类器
+    //    多层感知分类器
     val inputLayers = vectorizer.getVocabSize
     val hideLayer1 = Math.round(Math.log(inputLayers)/Math.log(2)).toInt
     val outputLayers = peopleNews.select("tab").distinct().count().toInt
     val hideLayer2 = Math.round(Math.sqrt(inputLayers + outputLayers) + 1).toInt
     val layers = Array[Int](inputLayers, hideLayer1, hideLayer2, outputLayers)
+    val mpcstartTime = new Date().getTime
     val mpc = new MultilayerPerceptronClassifier()
       .setLayers(layers)
       .setBlockSize(128)
@@ -170,6 +187,34 @@ object PeopleNewsPipelines {
     println(s"多层感知分类器验证集分类准确率：$accuracyMpct")
     val accuracyMpcv = evaluator.evaluate(mpcPredictions)
     println(s"多层感知分类器测试集分类准确率：$accuracyMpcv")
+    val mpcEndTime = new Date().getTime
+    val mpcCostTime = mpcEndTime - mpcstartTime
+    println(s"多层感知分类器分类耗时：$mpcCostTime")
+
+//    xgboost训练模型
+    val xgbParam = Map("eta" -> 0.1f,
+      "max_depth" -> 10, //数的最大深度。缺省值为6 ,取值范围为：[1,∞]
+      "objective" -> "multi:softprob",  //定义学习任务及相应的学习目标
+      "num_class" -> outputLayers,
+      "num_round" -> 10,
+      "num_workers" -> 1)
+    val xgbStartTime = new Date().getTime
+    val xgb = new XGBoostClassifier(xgbParam).
+      setFeaturesCol("features").
+      setLabelCol("label")
+
+    val xgbPipeline = new Pipeline()
+      .setStages(Array(indexer,segmenter,remover,vectorizer,xgb,converts))
+    val xgbModel = xgbPipeline.fit(train)
+    val xgbValiad = xgbModel.transform(train)
+    val xgbPredictions = xgbModel.transform(test)
+    val accuracyXgbt = evaluator.evaluate(xgbValiad)
+    println(s"xgboost验证集分类准确率为：$accuracyXgbt")
+    val accuracyXgbv = evaluator.evaluate(xgbPredictions)
+    println(s"xgboost测试集分类准确率为：$accuracyXgbv")
+    val xgbEndTime = new Date().getTime
+    val xgbCostTime = xgbEndTime - xgbStartTime
+    println(s"xgboost分类耗时：$xgbCostTime")
 
 //    线性支持向量机
     val lsvc = new LinearSVC()
@@ -187,6 +232,7 @@ object PeopleNewsPipelines {
 //    println(s"线性支持向量机测试集分类准确率：$accuracyLsvcv")
 
 //    朴素贝叶斯分类
+    val nvbStartTime = new Date().getTime
     val nvb = new NaiveBayes()
     val nvbPipeline = new Pipeline()
       .setStages(Array(indexer,segmenter,remover,vectorizer,nvb,converts))
@@ -197,6 +243,9 @@ object PeopleNewsPipelines {
     println(s"朴素贝叶斯验证集分类准确率：$accuracyNvbt")
     val accuracyNvbv = evaluator.evaluate(nvbPredictions)
     println(s"朴素贝叶斯测试集分类准确率：$accuracyNvbv")
+    val nvbEndTime = new Date().getTime
+    val nvbCostTime = nvbEndTime - nvbStartTime
+    println(s"朴素贝叶斯分类耗时：$nvbCostTime")
   }
 
   class HanLPTokenizer(override val uid:String) extends UnaryTransformer[String, Seq[String], HanLPTokenizer] {

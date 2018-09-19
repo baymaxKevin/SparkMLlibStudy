@@ -154,7 +154,7 @@ object PeopleNews {
     val converts = new IndexToString()
       .setInputCol("prediction")
       .setOutputCol("predictionTab")
-      .setLabels(indDF.schema("label").metadata.getMetadata("ml_attr").getStringArray("vals"))
+      .setLabels(indexer.labels)
 
     val predTab = converts.transform(predictions)
     predTab.select("prediction","predictionTab","label","tab","probability").show(5,false)

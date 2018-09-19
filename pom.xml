@@ -110,7 +110,12 @@
             <artifactId>hanlp</artifactId>
             <version>portable-1.6.8</version>
         </dependency>
-
+        <!-- https://mvnrepository.com/artifact/ml.dmlc/xgboost4j-spark -->
+        <dependency>
+            <groupId>ml.dmlc</groupId>
+            <artifactId>xgboost4j-spark</artifactId>
+            <version>0.80</version>
+        </dependency>
     </dependencies>
     <build>
         <finalName>lee</finalName>

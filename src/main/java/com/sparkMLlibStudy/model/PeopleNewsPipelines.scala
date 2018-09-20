@@ -44,8 +44,6 @@ object PeopleNewsPipelines {
     val segmenter = new HanLPTokenizer()
       .setInputCol("content")
       .setOutputCol("tokens")
-      .enableNature(false)
-      .setSegmentType("StandardSegment")
 
     val stopwords = spark.read.textFile("/opt/data/stopwordsCH.txt").collect()
 
@@ -199,9 +197,9 @@ object PeopleNewsPipelines {
       "num_round" -> 10,
       "num_workers" -> 1)
     val xgbStartTime = new Date().getTime
-    val xgb = new XGBoostClassifier(xgbParam).
-      setFeaturesCol("features").
-      setLabelCol("label")
+    val xgb = new XGBoostClassifier(xgbParam)
+      .setFeaturesCol("features")
+      .setLabelCol("label")
 
     val xgbPipeline = new Pipeline()
       .setStages(Array(indexer,segmenter,remover,vectorizer,xgb,converts))
@@ -250,7 +248,7 @@ object PeopleNewsPipelines {
 
   class HanLPTokenizer(override val uid:String) extends UnaryTransformer[String, Seq[String], HanLPTokenizer] {
 
-    private var segmentType = "StandardTokenizer"
+    private var segmentType = "StandardSegment"
     private var enableNature = false
 
     def setSegmentType(value:String):this.type = {
@@ -286,7 +284,7 @@ object PeopleNewsPipelines {
         case "CRFlexicalAnalyzer" =>
           terms = new CRFLexicalAnalyzer().seg(line)
         case _ =>
-          println("分词类型错误！")
+          println("分词类型错误！" + segmentType)
           System.exit(1)
       }
       val termSeq = terms.map(term =>

@@ -50,6 +50,12 @@
             <artifactId>spark-mllib_2.11</artifactId>
             <version>2.3.1</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-graphx -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-graphx_2.11</artifactId>
+            <version>2.3.1</version>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/com.alibaba/fastjson -->
         <dependency>
             <groupId>com.alibaba</groupId>

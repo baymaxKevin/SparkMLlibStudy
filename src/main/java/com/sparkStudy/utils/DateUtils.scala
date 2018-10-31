@@ -34,11 +34,33 @@ object DateUtils {
     dataStr
   }
 
+  /**
+    * 获取前n天时间
+    * @param day
+    * @return String
+    */
   def getDay(day:Int):String = {
     var dateFormat:SimpleDateFormat = new SimpleDateFormat("yyyyMMdd")
     var cal:Calendar = Calendar.getInstance()
     cal.add(Calendar.DATE, day)
     var dateStr = dateFormat.format(cal.getTime)
     dateStr
+  }
+
+  /**
+    * 获取小时时间
+    * @param time
+    * @return
+    */
+  def getLogHour(time:String):String = {
+    try{
+      time.split(" ")(1).split(":")(0)
+    }catch{
+      case e:Throwable => "0"
+    }
+  }
+
+  def main(args: Array[String]): Unit = {
+    println(getDay(-1))
   }
 }

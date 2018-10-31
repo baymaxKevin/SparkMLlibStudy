@@ -1,5 +1,8 @@
 package com.sparkMLlibStudy.features
 
+import scala.collection.mutable.ArrayBuffer
+import scala.util.Try
+
 /**
   * @Author: JZ.lee
   * @Description: TODO
@@ -134,7 +137,7 @@ class CommonLabelPoint2 extends Serializable {
     */
   var userVreN: String = ""
   /**
-    *
+    * 用户活跃度
     */
   var userBotActCt: String = ""
   /**
@@ -1018,6 +1021,39 @@ class CommonLabelPoint2 extends Serializable {
       itemKs1 + "^" +
       itemKs2
   }
+
+  def setValue(filedName: String, value: String) = {
+    val ru=scala.reflect.runtime.universe
+    val im = ru.runtimeMirror(getClass.getClassLoader).reflect(this)
+    val field = ru.typeOf[CommonLabelPoint2].decl(ru.TermName(filedName)).asTerm
+    Try(im.reflectField(field).set(value))
+  }
+
+  def getValue(filedName:String)={
+    val ru = scala.reflect.runtime.universe
+    val im = ru.runtimeMirror(getClass.getClassLoader).reflect(this)
+    val field = ru.typeOf[CommonLabelPoint2].decl(ru.TermName(filedName)).asTerm
+    Try(im.reflectField(field).get.toString).getOrElse("0")
+  }
+
+  def getValues(columns:Array[String])={
+    val array=ArrayBuffer[java.lang.Double]()
+    columns.foreach(field=>{
+      val temp=Try(this.getValue(field).toDouble).getOrElse(-1.0)
+      array +=temp
+    })
+    array.toArray
+  }
+
+  def getStringValues(columns:Array[String])={
+    val array=ArrayBuffer[java.lang.String]()
+    columns.foreach(field=>{
+      val temp=Try(this.getValue(field)).getOrElse("")
+      array +=temp
+    })
+    array.toArray
+  }
+
 }
 
 object CommonLabelPoint2 {

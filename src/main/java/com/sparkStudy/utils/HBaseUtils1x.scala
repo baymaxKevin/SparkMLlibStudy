@@ -82,9 +82,11 @@ object HBaseUtils1x {
       // 设置列压缩格式
       val hColumnDescriptor=new HColumnDescriptor(f).setCompressionType(Algorithm.SNAPPY)
       // 设置blockcache大小
-      hColumnDescriptor.setBlocksize(8192)
+      hColumnDescriptor.setBlocksize(16384)
       // 设置列簇的生命周期
       hColumnDescriptor.setTimeToLive(liveTime)
+      // 设置最大版本数
+      hColumnDescriptor.setMaxVersions(5)
       desc.addFamily(hColumnDescriptor)
     }
     if (!admin.tableExists(name)) {

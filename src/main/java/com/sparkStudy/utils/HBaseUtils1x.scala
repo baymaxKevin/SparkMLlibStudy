@@ -3,6 +3,7 @@ package com.sparkStudy.utils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.client.BufferedMutator.ExceptionListener
 import org.apache.hadoop.hbase.client._
+import org.apache.hadoop.hbase.io.compress.Compression.Algorithm
 import org.apache.hadoop.hbase.protobuf.ProtobufUtil
 import org.apache.hadoop.hbase.util.{Base64, Bytes}
 import org.apache.hadoop.hbase.{HBaseConfiguration, HColumnDescriptor, HTableDescriptor, TableName}
@@ -78,7 +79,8 @@ object HBaseUtils1x {
     val name: TableName = TableName.valueOf(tableName)
     val desc: HTableDescriptor = new HTableDescriptor(name)
     for (f <- family) {
-      val hColumnDescriptor=new HColumnDescriptor(f)
+      // 设置列压缩格式
+      val hColumnDescriptor=new HColumnDescriptor(f).setCompressionType(Algorithm.SNAPPY)
       // 设置blockcache大小
       hColumnDescriptor.setBlocksize(8192)
       // 设置列簇的生命周期

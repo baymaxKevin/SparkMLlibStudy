@@ -79,6 +79,9 @@ object HBaseUtils1x {
     val desc: HTableDescriptor = new HTableDescriptor(name)
     for (f <- family) {
       val hColumnDescriptor=new HColumnDescriptor(f)
+      // 设置blockcache大小
+      hColumnDescriptor.setBlocksize(8192)
+      // 设置列簇的生命周期
       hColumnDescriptor.setTimeToLive(liveTime)
       desc.addFamily(hColumnDescriptor)
     }
@@ -89,6 +92,7 @@ object HBaseUtils1x {
 
   def getGetAction(rowKey: String):Get = {
     val getAction = new Get(Bytes.toBytes(rowKey))
+    // 查询默认缓存，设置为false可以节省交换缓存操作消耗
     getAction.setCacheBlocks(false)
     getAction
   }
@@ -96,7 +100,9 @@ object HBaseUtils1x {
   def getPutAction(rowKey: String, familyName:String, column: Array[String], value: Array[String]):Put = {
     val put: Put = new Put(Bytes.toBytes(rowKey))
     for (i <- 0 until(column.length)) {
-      put.add(Bytes.toBytes(familyName), Bytes.toBytes(column(i)), Bytes.toBytes(value(i)));
+      put.add(Bytes.toBytes(familyName), Bytes.toBytes(column(i)), Bytes.toBytes(value(i)))
+      // 关闭WAL机制
+      put.setDurability(Durability.SKIP_WAL)
     }
     put
   }
@@ -118,6 +124,7 @@ object HBaseUtils1x {
         }
       }
     }
+    // 设置客户端写buffer大小，达到阈值则flush
     val params = new BufferedMutatorParams(name)
       .listener(listener)
       .writeBufferSize(4*1024*1024)
@@ -139,8 +146,8 @@ object HBaseUtils1x {
   def scan4All(tableName:String, startRowKey:String, endRowKey:String, family:String, column:String) = {
     val name = TableName.valueOf(tableName)
     val scan = new Scan()
-    scan.setStartRow(Bytes.toBytes(startRowKey))
-    scan.setStopRow(Bytes.toBytes(endRowKey))
+    scan.withStartRow(Bytes.toBytes(startRowKey))
+    scan.withStopRow(Bytes.toBytes(endRowKey))
     scan.addColumn(Bytes.toBytes(family), Bytes.toBytes(column))
     scan.setCacheBlocks(false)
     connection.getTable(name).getScanner(scan)

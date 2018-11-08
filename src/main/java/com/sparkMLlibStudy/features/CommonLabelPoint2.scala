@@ -1361,7 +1361,7 @@ object CommonLabelPoint2 {
 
   def toObjectForDIN(str: String): CommonLabelPoint2 = {
     var lb = new CommonLabelPoint2
-    val array = str.split("\\^")
+    val array = str.split("\\^",-1)
     val size = array.length
     if (size == 9 || size == 26 || size == 32) {
       lb.batchNo = array(0)

@@ -1,16 +1,12 @@
 package com.sparkMLlibStudy.features
 
-import com.sparkStudy.utils.{DateUtils, HBaseUtils1x}
-import org.apache.calcite.avatica.ColumnMetaData.StructType
+import com.sparkStudy.utils.DateUtils
 import org.apache.commons.lang3.StringUtils
-import org.apache.hadoop.hbase.client.Result
-import org.apache.hadoop.hbase.io.ImmutableBytesWritable
-import org.apache.hadoop.hbase.mapreduce.TableInputFormat
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.ml.{Pipeline, PipelineStage}
 import org.apache.spark.ml.feature.Bucketizer
+import org.apache.spark.ml.{Pipeline, PipelineStage}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.{DoubleType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DoubleType, StringType, StructField}
 import org.apache.spark.sql.{DataFrame, RowFactory, SparkSession, types}
 
 import scala.collection.mutable
@@ -386,7 +382,7 @@ object FeaturesProcess {
     labelUserItems
   }
 
-  private def getUserBotActCt(userColN:String,userRevi:String,userShare:String,userLireN:String,userVreN:String) = {
+  def getUserBotActCt(userColN:String,userRevi:String,userShare:String,userLireN:String,userVreN:String) = {
     var result = 0
     if(StringUtils.isNoneEmpty(userColN) && !"-1".equals(userColN)){
       result += userColN.toInt

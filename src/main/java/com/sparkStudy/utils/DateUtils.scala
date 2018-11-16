@@ -1,7 +1,11 @@
 package com.sparkStudy.utils
 
+import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Calendar
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 
 /**
   * @Author: JZ.lee
@@ -60,7 +64,22 @@ object DateUtils {
     }
   }
 
+  /**
+    * 获取hdfs下目录文件
+    * @param hdfsPath
+    */
+  def getHdfsPath(hdfsPath:String) = {
+    val conf = new Configuration()
+    val hdfs = FileSystem.get(URI.create(hdfsPath),conf)
+    val fs = hdfs.listStatus(new Path(hdfsPath))
+    val listPath = FileUtil.stat2Paths(fs)
+    for(l <- listPath){
+      println(l.getName)
+    }
+  }
+
   def main(args: Array[String]): Unit = {
-    println(getDay(-1))
+    val hdfsPath = "hdfs://lee:8020/"
+    getHdfsPath(hdfsPath)
   }
 }

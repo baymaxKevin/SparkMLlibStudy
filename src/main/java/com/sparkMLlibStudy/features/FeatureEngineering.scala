@@ -125,4 +125,37 @@ class FeatureEngineering {
 
     featurePipeline.fit(samples)
   }
+
+  //正常预处理样本以生成特征向量
+  def preProcessSamples(samples:DataFrame):PipelineModel = {
+    val contentTypeIndexer = new StringIndexer().setInputCol("content_type").setOutputCol("content_type_index")
+
+    val oneHotEncoder = new OneHotEncoderEstimator()
+      .setInputCols(Array("content_type_index"))
+      .setOutputCols(Array("content_type_vector"))
+      .setDropLast(false)
+
+    val ctr_discretizer = new QuantileDiscretizer()
+      .setInputCol("item_ctr")
+      .setOutputCol("ctr_bucket")
+      .setNumBuckets(100)
+
+    val vectorAsCols = Array("content_type_vector", "ctr_bucket", "user_item_click", "user_item_imp", "is_new_user", "user_embedding", "item_embedding")
+    val vectorAssembler = new VectorAssembler().setInputCols(vectorAsCols).setOutputCol("vectorFeature")
+
+    val scaler = new MinMaxScaler().setInputCol("vectorFeature").setOutputCol("scaledFeatures")
+
+    /*
+    val scaler = new StandardScaler()
+      .setInputCol("vectorFeature")
+      .setOutputCol("scaledFeatures")
+      .setWithStd(true)
+      .setWithMean(true)
+    */
+
+    val pipelineStage: Array[PipelineStage] = Array(contentTypeIndexer, oneHotEncoder, ctr_discretizer, vectorAssembler, scaler)
+    val featurePipeline = new Pipeline().setStages(pipelineStage)
+
+    featurePipeline.fit(samples)
+  }
 }
